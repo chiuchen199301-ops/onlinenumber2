@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雙櫃檯即時叫號系統</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        body { margin: 0; font-family: system-ui, sans-serif; background: #1a1a1a; color: white; display: flex; align-items: center; justify-content: center; height: 100vh; text-align: center; }
+        .container { width: 100%; max-width: 450px; padding: 20px; }
+        .label { color: #888; font-size: 1.2rem; letter-spacing: 2px; }
+        
+        /* 大數字樣式 */
+        #number-display { font-size: 150px; font-weight: 900; margin: 10px 0; color: #00ff88; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        
+        /* 動態櫃檯提示文字 */
+        #counter-text {
+          font-size: 2.2rem;
+          color: #ffcc00;
+          font-weight: bold;
+          margin-bottom: 20px;
+          letter-spacing: 2px;
+          text-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+          min-height: 3rem; /* 固定高度防止跳動 */
+        }
+        
+        /* 管理員控制區 */
+        .admin-panel { margin-top: 30px; padding: 20px; border-top: 1px solid #333; display: none; }
+        .btn-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        button { border: none; padding: 15px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; cursor: pointer; width: 100%; transition: 0.2s; }
+        button:active { transform: scale(0.95); opacity: 0.8; }
+        
+        /* 按鈕顏色定義 */
+        .btn-next { background: #00ff88; color: #000; }
+        .btn-counter1 { background: #00d4ff; color: #000; } /* 1號櫃檯用藍色 */
+        .btn-counter2 { background: #ff7700; color: #000; } /* 2號櫃檯用橘色 */
+        .btn-back { background: #555; font-size: 0.9rem; color: white; margin-top: 10px; }
+
+        input { background: #333; border: 1px solid #444; color: white; padding: 10px; width: 70%; font-size: 1rem; text-align: center; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="label">NOW SERVING</div>
+        <div id="number-display">--</div>
+        
+        <div id="counter-text">歡迎光臨</div>
+
+        <div id="admin-box" class="admin-panel">
+            <button onclick="changeNumber(1)" class="btn-next" style="margin-bottom: 15px; font-size: 1.5rem;">下一位 (+1)</button>
+            
+            <div class="btn-group">
+                <button onclick="callCounter(1)" class="btn-counter1">1號櫃檯呼叫</button>
+                <button onclick="callCounter(2)" class="btn-counter2">2號櫃檯呼叫</button>
+            </div>
+            
+            <div style="margin: 20px 0; border-top: 1px dashed #444; pt: 15px;">
+                <input type="number" id="manual-input" placeholder="跳號修改">
+                <button onclick="setManual()" style="width: auto; padding: 8px 15px; font-size: 1rem;">確認</button>
+            </div>
+            
+            <button onclick="changeNumber(-1)" class="btn-back">修正回退 (-1)</button>
+        </div>
+        
+        <p style="font-size: 0.8rem; color: #444;" id="mode-text">客人模式</p>
+    </div>
+
+    <script>
+        // --- 1. Firebase 設定 ---
+        const firebaseConfig = {
+            databaseURL: "https://onlinenumber-d0369-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const numRef = db.ref('currentNumber');
+        const counterRef = db.ref('activeCounter'); // 新增：紀錄當前呼叫的櫃檯
+
+        // --- 2. 監聽變化 (數字與櫃檯同步) ---
+        numRef.on('value', (snapshot) => {
+            const val = snapshot.val() || 0;
+            document.getElementById('number-display').innerText = val;
+            animateDisplay();
+        });
+
+        counterRef.on('value', (snapshot) => {
+            const counterNum = snapshot.val();
+            const textEl = document.getElementById('counter-text');
+            if (counterNum) {
+                textEl.innerText = `請至 ${counterNum} 號櫃檯辦理`;
+                textEl.style.color = (counterNum == 1) ? "#00d4ff" : "#ff7700"; // 顏色同步切換
+            }
+        });
+
+        // --- 3. 控制功能 ---
+        function changeNumber(offset) {
+            numRef.transaction((current) => (current || 0) + offset);
+        }
+
+        function setManual() {
+            const newNum = parseInt(document.getElementById('manual-input').value);
+            if (!isNaN(newNum)) {
+                numRef.set(newNum);
+                document.getElementById('manual-input').value = '';
+            }
+        }
+
+        // --- 4. 櫃檯呼叫邏輯 (核心需求) ---
+        function callCounter(num) {
+            // 更新資料庫，讓所有螢幕同步顯示是幾號櫃檯
+            counterRef.set(num);
+            
+            // 執行語音廣播
+            const currentNum = document.getElementById('number-display').innerText;
+            if (currentNum === "--") return;
+
+            const msg = new SpeechSynthesisUtterance();
+            msg.text = `${currentNum} 號，請至 ${num} 號櫃檯辦理。`;
+            msg.lang = 'zh-TW';
+            msg.rate = 0.9;
+            window.speechSynthesis.speak(msg);
+        }
+
+        function animateDisplay() {
+            const el = document.getElementById('number-display');
+            el.style.transform = 'scale(1.1)';
+            setTimeout(() => el.style.transform = 'scale(1)', 200);
+        }
+
+        // --- 5. 權限判斷 ---
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('admin')) {
+            document.getElementById('admin-box').style.display = 'block';
+            document.getElementById('mode-text').innerText = '管理員模式';
+        }
+    </script>
+</body>
+</html>
