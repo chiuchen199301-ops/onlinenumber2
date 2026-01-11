@@ -8,42 +8,24 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
         body { margin: 0; font-family: system-ui, sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; min-height: 100vh; text-align: center; }
-        
-        .header {
-            width: 100%; background: #2d2d2d; padding: 15px 0; font-size: 1.5rem; font-weight: bold; 
-            color: #ffffff; 
-            border-bottom: 3px solid #00ff88; letter-spacing: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-        }
-
+        .header { width: 100%; background: #2d2d2d; padding: 15px 0; font-size: 1.5rem; font-weight: bold; color: #ffffff; border-bottom: 3px solid #00ff88; letter-spacing: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         .container { width: 100%; max-width: 600px; padding: 20px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
-
         .display-board { display: flex; gap: 20px; justify-content: center; margin: 20px 0; }
-        .counter-card {
-            flex: 1; background: #262626; padding: 25px 10px; border-radius: 15px; border: 2px solid #444;
-            transition: 0.3s;
-        }
+        .counter-card { flex: 1; background: #262626; padding: 25px 10px; border-radius: 15px; border: 2px solid #444; transition: 0.3s; }
         .active-1 { border-color: #00d4ff !important; box-shadow: 0 0 20px rgba(0, 212, 255, 0.5); }
         .active-2 { border-color: #ff7700 !important; box-shadow: 0 0 20px rgba(255, 119, 0, 0.5); }
-
         .card-label { font-size: 1.4rem; color: #888; margin-bottom: 10px; font-weight: bold; }
         .big-number { font-size: 100px; font-weight: 900; line-height: 1; margin: 15px 0; }
-        
         .c1-text { color: #00d4ff; }
         .c2-text { color: #ff7700; }
-
-        #status-text {
-          font-size: 1.8rem; color: #ffcc00; font-weight: bold; margin-top: 20px;
-          min-height: 2.5rem; text-shadow: 0 0 8px rgba(255, 204, 0, 0.5);
-        }
-        
+        #status-text { font-size: 1.8rem; color: #ffcc00; font-weight: bold; margin-top: 20px; min-height: 2.5rem; text-shadow: 0 0 8px rgba(255, 204, 0, 0.5); }
         .admin-panel { margin-top: 30px; padding: 20px; border-top: 1px solid #333; display: none; background: #222; border-radius: 15px; }
         .btn-group { display: flex; gap: 10px; margin-bottom: 15px; }
         button { border: none; padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 10px; cursor: pointer; width: 100%; transition: 0.2s; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         button:active { transform: scale(0.95); }
-        
         .btn-c1 { background: #00d4ff; color: #000; }
         .btn-c2 { background: #ff7700; color: #000; }
-        
         .manual-area { margin-top: 5px; padding: 15px; background: #333; border-radius: 10px; }
         .manual-area label { display: block; font-size: 0.8rem; color: #aaa; margin-bottom: 8px; }
         input { background: #1a1a1a; border: 1px solid #555; color: #00ff88; padding: 12px; width: 120px; text-align: center; border-radius: 5px; font-size: 1.2rem; font-weight: bold; }
@@ -69,13 +51,13 @@
 
         <div id="admin-box" class="admin-panel">
             <div class="manual-area">
-                <label>若要指定跳號，請先輸入數字後再按下方呼叫鈕：</label>
+                <label>指定下一號（輸入後按呼叫，空白則自動+1）：</label>
                 <input type="number" id="manual-num" placeholder="下一號">
             </div>
 
             <div style="margin-top: 15px;" class="btn-group">
-                <button onclick="takeNext(1)" class="btn-c1">1號櫃檯 呼叫</button>
-                <button onclick="takeNext(2)" class="btn-c2">2號櫃檯 呼叫</button>
+                <button id="btn-call-1" onclick="takeNext(1)" class="btn-c1">1號櫃檯 呼叫</button>
+                <button id="btn-call-2" onclick="takeNext(2)" class="btn-c2">2號櫃檯 呼叫</button>
             </div>
 
             <div class="btn-group">
@@ -88,9 +70,7 @@
     </div>
 
     <script>
-        const firebaseConfig = {
-            databaseURL: "https://onlinenumber-d0369-default-rtdb.firebaseio.com/"
-        };
+        const firebaseConfig = { databaseURL: "https://onlinenumber-d0369-default-rtdb.firebaseio.com/" };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         
@@ -99,9 +79,9 @@
         const c2Ref = db.ref('c2_last'); 
         const lastRef = db.ref('lastCalled'); 
 
+        // 監聽狀態
         c1Ref.on('value', (s) => { document.getElementById('num-c1').innerText = s.val() || 0; });
         c2Ref.on('value', (s) => { document.getElementById('num-c2').innerText = s.val() || 0; });
-
         lastRef.on('value', (s) => {
             const side = s.val();
             const textEl = document.getElementById('status-text');
@@ -113,36 +93,52 @@
             }
         });
 
-        // 修改後的取號邏輯：支援「指定跳號」
+        let isProcessing = false; // 防連點鎖
+
         function takeNext(counterNum) {
+            if (isProcessing) return; // 如果正在處理中，跳過此次點擊
+            isProcessing = true;
+            
+            // 暫時禁用按鈕，防止快速連按
+            document.getElementById('btn-call-1').disabled = true;
+            document.getElementById('btn-call-2').disabled = true;
+
             window.speechSynthesis.cancel();
             
-            // 檢查輸入框是否有指定數字
             const manualInput = document.getElementById('manual-num');
             const targetNum = parseInt(manualInput.value);
 
             if (!isNaN(targetNum)) {
-                // 情境 A: 管理員指定了數字
-                globalNumRef.set(targetNum); // 更新資料庫總號碼
-                updateCounterData(counterNum, targetNum); // 更新櫃檯顯示
-                manualInput.value = ''; // 清空輸入框
+                // 情境：指定跳號 (使用 set 而非 transaction)
+                globalNumRef.set(targetNum).then(() => {
+                    updateCounterData(counterNum, targetNum);
+                    manualInput.value = '';
+                    unlockButtons();
+                });
             } else {
-                // 情境 B: 正常的自動 +1 流程
+                // 情境：自動累加 (使用 transaction)
                 globalNumRef.transaction((current) => {
                     return (current || 0) + 1;
                 }, (error, committed, snapshot) => {
                     if (committed) {
                         updateCounterData(counterNum, snapshot.val());
                     }
+                    unlockButtons();
                 });
             }
         }
 
-        // 輔助更新櫃檯資料與語音
+        function unlockButtons() {
+            setTimeout(() => {
+                isProcessing = false;
+                document.getElementById('btn-call-1').disabled = false;
+                document.getElementById('btn-call-2').disabled = false;
+            }, 800); // 0.8 秒後才允許下次點擊
+        }
+
         function updateCounterData(counterNum, num) {
             if (counterNum === 1) c1Ref.set(num);
             else c2Ref.set(num);
-            
             lastRef.set(counterNum);
             
             setTimeout(() => {
@@ -173,4 +169,3 @@
     </script>
 </body>
 </html>
-
