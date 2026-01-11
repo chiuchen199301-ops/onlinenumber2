@@ -3,36 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>用電設備檢驗 - 雙櫃檯系統</title>
+    <title>用電設備檢驗 - 雙櫃檯共用號碼</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
         body { margin: 0; font-family: system-ui, sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; min-height: 100vh; text-align: center; }
         
-        /* 網頁表頭 */
+        /* 網頁表頭：標題改為白色 */
         .header {
-            width: 100%; background: #2d2d2d; padding: 15px 0; font-size: 1.5rem; font-weight: bold; color: #00ff88;
+            width: 100%; background: #2d2d2d; padding: 15px 0; font-size: 1.5rem; font-weight: bold; 
+            color: #ffffff; /* 已修改為白色 */
             border-bottom: 3px solid #00ff88; letter-spacing: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
 
         .container { width: 100%; max-width: 600px; padding: 20px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
 
-        /* 雙櫃檯並列顯示區域 */
+        /* 民眾看板：顯示各櫃檯當前辦理號碼 */
         .display-board { display: flex; gap: 20px; justify-content: center; margin: 20px 0; }
         .counter-card {
-            flex: 1; background: #262626; padding: 20px; border-radius: 15px; border: 2px solid #444;
+            flex: 1; background: #262626; padding: 25px 10px; border-radius: 15px; border: 2px solid #444;
             transition: 0.3s;
         }
-        .counter-card.active-1 { border-color: #00d4ff; box-shadow: 0 0 15px rgba(0, 212, 255, 0.4); }
-        .counter-card.active-2 { border-color: #ff7700; box-shadow: 0 0 15px rgba(255, 119, 0, 0.4); }
+        /* 正在呼叫時的光暈效果 */
+        .active-1 { border-color: #00d4ff !important; box-shadow: 0 0 20px rgba(0, 212, 255, 0.5); }
+        .active-2 { border-color: #ff7700 !important; box-shadow: 0 0 20px rgba(255, 119, 0, 0.5); }
 
-        .card-label { font-size: 1.2rem; color: #888; margin-bottom: 10px; }
-        .big-number { font-size: 80px; font-weight: 900; line-height: 1; margin: 10px 0; }
+        .card-label { font-size: 1.4rem; color: #888; margin-bottom: 10px; font-weight: bold; }
+        .big-number { font-size: 100px; font-weight: 900; line-height: 1; margin: 15px 0; }
         
-        .c1-color { color: #00d4ff; }
-        .c2-color { color: #ff7700; }
+        .c1-text { color: #00d4ff; }
+        .c2-text { color: #ff7700; }
 
-        /* 動態提示文字 */
         #status-text {
           font-size: 1.8rem; color: #ffcc00; font-weight: bold; margin-top: 20px;
           min-height: 2.5rem; text-shadow: 0 0 8px rgba(255, 204, 0, 0.5);
@@ -44,13 +45,11 @@
         button { border: none; padding: 15px; font-size: 1.1rem; font-weight: bold; border-radius: 10px; cursor: pointer; width: 100%; transition: 0.2s; }
         button:active { transform: scale(0.95); }
         
-        .btn-next { background: #00ff88; color: #000; margin-bottom: 10px; font-size: 1.3rem; }
         .btn-c1 { background: #00d4ff; color: #000; }
         .btn-c2 { background: #ff7700; color: #000; }
-        .btn-back { background: #555; font-size: 0.8rem; color: white; margin-top: 10px; }
-
-        .manual-area { margin: 15px 0; padding-top: 10px; border-top: 1px dashed #444; display: flex; gap: 5px; justify-content: center; }
-        input { background: #333; border: 1px solid #444; color: white; padding: 8px; width: 60px; text-align: center; border-radius: 5px; }
+        
+        .manual-area { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #444; }
+        input { background: #333; border: 1px solid #444; color: white; padding: 10px; width: 100px; text-align: center; border-radius: 5px; font-size: 1rem; }
     </style>
 </head>
 <body>
@@ -61,35 +60,32 @@
         <div class="display-board">
             <div id="card-1" class="counter-card">
                 <div class="card-label">1 號櫃檯</div>
-                <div id="num-c1" class="big-number c1-color">--</div>
+                <div id="num-c1" class="big-number c1-text">--</div>
             </div>
             <div id="card-2" class="counter-card">
                 <div class="card-label">2 號櫃檯</div>
-                <div id="num-c2" class="big-number c2-color">--</div>
+                <div id="num-c2" class="big-number c2-text">--</div>
             </div>
         </div>
 
         <div id="status-text">歡迎光臨</div>
 
         <div id="admin-box" class="admin-panel">
-            <div style="color: #888; margin-bottom: 10px; font-size: 0.9rem;">管理員控制台</div>
+            <div style="color: #888; margin-bottom: 15px; font-size: 0.9rem;">管理員控制台 (共用號碼系統)</div>
             
             <div class="btn-group">
-                <button onclick="nextAndCall(1)" class="btn-c1">1號櫃檯 下一位</button>
-                <button onclick="nextAndCall(2)" class="btn-c2">2號櫃檯 下一位</button>
+                <button onclick="takeNext(1)" class="btn-c1">1號櫃檯 呼叫下一位</button>
+                <button onclick="takeNext(2)" class="btn-c2">2號櫃檯 呼叫下一位</button>
             </div>
 
             <div class="btn-group">
-                <button onclick="speakOnly(1)" style="background: #444; color: #00d4ff; font-size: 0.9rem;">1號重撥</button>
-                <button onclick="speakOnly(2)" style="background: #444; color: #ff7700; font-size: 0.9rem;">2號重撥</button>
+                <button onclick="reSpeak(1)" style="background: #444; color: #00d4ff; font-size: 0.9rem;">1號重播</button>
+                <button onclick="reSpeak(2)" style="background: #444; color: #ff7700; font-size: 0.9rem;">2號重播</button>
             </div>
             
             <div class="manual-area">
-                <input type="number" id="m1" placeholder="1號號碼">
-                <button onclick="setManual(1)" style="width: auto; padding: 5px 10px; font-size: 0.8rem;">修改</button>
-                <span style="color: #444; margin: 0 10px;">|</span>
-                <input type="number" id="m2" placeholder="2號號碼">
-                <button onclick="setManual(2)" style="width: auto; padding: 5px 10px; font-size: 0.8rem;">修改</button>
+                <input type="number" id="manual-num" placeholder="總號碼修改">
+                <button onclick="setGlobalManual()" style="width: auto; padding: 10px 20px; background: #555; color: white;">修改總號碼</button>
             </div>
         </div>
         
@@ -104,82 +100,73 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         
-        // 分開紀錄兩個櫃檯的號碼
-        const refC1 = db.ref('counter1_Number');
-        const refC2 = db.ref('counter2_Number');
-        const refLastCall = db.ref('lastCalledCounter'); // 紀錄最後是誰叫號
+        const globalNumRef = db.ref('currentNumber'); // 唯一的總號碼來源
+        const c1Ref = db.ref('c1_last'); // 1號櫃檯最後叫到的號碼
+        const c2Ref = db.ref('c2_last'); // 2號櫃檯最後叫到的號碼
+        const lastRef = db.ref('lastCalled'); // 紀錄最後是誰正在叫
 
-        // --- 2. 監聽數據更新介面 ---
-        refC1.on('value', (s) => {
-            document.getElementById('num-c1').innerText = s.val() || 0;
-            animate(document.getElementById('card-1'));
-        });
+        // --- 2. 監聽更新 ---
+        c1Ref.on('value', (s) => { document.getElementById('num-c1').innerText = s.val() || 0; });
+        c2Ref.on('value', (s) => { document.getElementById('num-c2').innerText = s.val() || 0; });
 
-        refC2.on('value', (s) => {
-            document.getElementById('num-c2').innerText = s.val() || 0;
-            animate(document.getElementById('card-2'));
-        });
-
-        refLastCall.on('value', (s) => {
-            const counterNum = s.val();
+        lastRef.on('value', (s) => {
+            const side = s.val();
             const textEl = document.getElementById('status-text');
-            if (counterNum) {
-                textEl.innerText = `請至 ${counterNum} 號櫃檯辦理`;
-                textEl.style.color = (counterNum == 1) ? "#00d4ff" : "#ff7700";
+            if (side) {
+                textEl.innerText = `請至 ${side} 號櫃檯辦理`;
+                textEl.style.color = (side == 1) ? "#00d4ff" : "#ff7700";
                 
-                // 視覺高亮當前叫號的櫃檯
-                document.getElementById('card-1').classList.toggle('active-1', counterNum == 1);
-                document.getElementById('card-2').classList.toggle('active-2', counterNum == 2);
+                // 動態高亮
+                document.getElementById('card-1').classList.toggle('active-1', side == 1);
+                document.getElementById('card-2').classList.toggle('active-2', side == 2);
             }
         });
 
-        // --- 3. 管理員功能 ---
+        // --- 3. 管理員邏輯 ---
         
-        // 下一位並語音呼叫
-        function nextAndCall(counterNum) {
-            const ref = (counterNum === 1) ? refC1 : refC2;
-            ref.transaction((current) => {
-                const next = (current || 0) + 1;
-                // 更新完數字後呼叫語音
-                setTimeout(() => speak(next, counterNum), 100);
-                return next;
+        // 核心：共用跳號並分配給櫃檯
+        function takeNext(counterNum) {
+            globalNumRef.transaction((current) => {
+                const nextNum = (current || 0) + 1;
+                
+                // 將跳號後的數字分配給該櫃檯
+                if (counterNum === 1) c1Ref.set(nextNum);
+                else c2Ref.set(nextNum);
+                
+                lastRef.set(counterNum);
+                speak(nextNum, counterNum);
+                
+                return nextNum;
             });
-            refLastCall.set(counterNum);
         }
 
-        // 純語音重播（不跳號）
-        function speakOnly(counterNum) {
+        function reSpeak(counterNum) {
             const num = document.getElementById('num-c' + counterNum).innerText;
-            speak(num, counterNum);
-            refLastCall.set(counterNum);
+            if (num !== "--") {
+                speak(num, counterNum);
+                lastRef.set(counterNum);
+            }
         }
 
-        // 手動修改號碼
-        function setManual(counterNum) {
-            const val = parseInt(document.getElementById('m' + counterNum).value);
+        function setGlobalManual() {
+            const val = parseInt(document.getElementById('manual-num').value);
             if (!isNaN(val)) {
-                const ref = (counterNum === 1) ? refC1 : refC2;
-                ref.set(val);
-                document.getElementById('m' + counterNum).value = '';
+                globalNumRef.set(val);
+                document.getElementById('manual-num').value = '';
+                alert("總號碼已重設為 " + val + "，下次按叫號將從此開始計數。");
             }
         }
 
         // --- 4. 輔助功能 ---
         function speak(number, counter) {
-            if (number === "--") return;
-            window.speechSynthesis.cancel(); // 停止之前的語音防止堆疊
+            window.speechSynthesis.cancel();
             const msg = new SpeechSynthesisUtterance(`${number} 號，請至 ${counter} 號櫃檯辦理`);
             msg.lang = 'zh-TW';
             msg.rate = 0.9;
             window.speechSynthesis.speak(msg);
         }
 
-        function animate(el) {
-            el.style.transform = 'scale(1.05)';
-            setTimeout(() => el.style.transform = 'scale(1)', 200);
-        }
-
-        // --- 5. 權限判斷 ---
+        // --- 5. 權限 ---
         if (new URLSearchParams(window.location.search).get('admin')) {
             document.getElementById('admin-box').style.display = 'block';
             document.getElementById('mode-text').innerText = '管理員模式';
